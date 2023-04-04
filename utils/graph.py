@@ -16,13 +16,32 @@ class Node:
         self.variable = variable
         self.value = value
 
+    def add_prev(self, node):
+        if node not in self.prev:
+            self.prev.append(node)
+
+    def remove_prev(self, node):
+        self.prev.remove(node)
+
 class DAG:
     """
     A class to reprensent a Directed Acycic Graph
     """
     def __init__(self, nodes: Set[Node], randomize=False, density=0.5, random_seed=time()) -> None:
         if not randomize:
-            self.nodes = deepcopy(nodes)
+            # self.nodes = deepcopy(nodes)
+            # Stupid copy
+            node_list = list()
+            for node in nodes:  # Build new Nodes
+                new_node = Node(variable=node.variable, value=node.value)
+                node_list.append(new_node)
+            for node in nodes:  # Fill the prev
+                current_node = find_node(node_list, node.variable)
+                current_node.prev = []
+                for parent in node.prev:    # find the parent in new DAG
+                    new_parent = find_node(node_list, parent.variable)
+                    current_node.add_prev(new_parent)
+            self.nodes = set(node_list)
             self.colors = self.coloring()
         else:
             seed(random_seed)
@@ -138,14 +157,9 @@ class DAG:
             possible_addition = all_possibilities - already_present - forbiden_edges
             result = list()
             for edge in possible_addition:
-                parent, child = edge
-                copy_node = deepcopy(self.nodes)   # copy the nodes
-                new_child = find_node(copy_node, child.variable)
-                new_parent = find_node(copy_node, parent.variable)
-                copy_node.remove(new_child)     # remove the child from it
-                child.prev.append(new_parent)   # add the new edge
-                copy_node.add(new_child)    # replace the child
-                result.append(DAG(copy_node))   # build the new DAG
+                new_dag = DAG(self.nodes)
+                new_dag.add_edge(edge)
+                result.append(new_dag)   # build the new DAG
             return result
 
         def remove_edge_neighbor():
@@ -154,12 +168,9 @@ class DAG:
            """
             result = list()
             for edge in already_present:
-                parent, child = edge
-                copy_node = self.nodes.copy()  # copy the nodes
-                copy_node.remove(child)  # remove the child from it
-                child.prev.remove(parent)  # remove the wanted edge
-                copy_node.add(child)  # replace the child
-                result.append(DAG(copy_node))  # build the new DAG
+                new_dag = DAG(self.nodes)
+                new_dag.remove_edge(edge)
+                result.append(new_dag)
             return result
 
         def inverse_edge_neighbor():
@@ -173,20 +184,26 @@ class DAG:
             reversal_possibilities = all_reverse - forbiden_edges
             result = list()
             for edge in reversal_possibilities:
-                parent, child = edge
-                copy_node = self.nodes.copy()  # copy the nodes
-                copy_node.remove(child)  # remove the child from it
-                copy_node.remove(parent)
-                child.prev.remove(parent)  # remove the wanted edge
-                parent.prev.append(child)
-                copy_node.add(child)  # replace the child
-                copy_node.add(parent)
-                result.append(DAG(copy_node))  # build the new DAG
+                new_dag = DAG(self.nodes)
+                new_dag.reverse_edge(edge)
+                result.append(new_dag)
             return result
 
         a = added_edge_neigbhor()
+        print("ADD EDGE")
+        for graph in a:
+            graph.print()
+            print("end")
         b = remove_edge_neighbor()
+        print("RM EDGE")
+        for graph in b:
+            graph.print()
+            print("end")
         c = inverse_edge_neighbor()
+        print("REV EDGE")
+        for graph in c:
+            graph.print()
+            print("end")
         return a + b + c
 
     def coloring(self):
@@ -228,15 +245,32 @@ class DAG:
 
         adjency_list = {node: set() for node in self.nodes}
         for node in adjency_list:
-            print([parent.variable for parent in node.prev])
             for parent in node.prev:
-                print(parent.variable)
                 adjency_list[parent].add(node)
 
         for node in self.nodes:
             if not visited[node]:
                 explore(adjency_list, node, visited, stack)
         return stack
+
+    def add_edge(self, edge):
+        old_parent, old_child = edge
+        new_child = find_node(self.nodes, old_child.variable)
+        target = find_node(self.nodes, old_parent.variable)
+        new_child.add_prev(target)
+        self.colors = self.coloring()
+
+    def remove_edge(self, edge):
+        old_parent, old_child = edge
+        new_child = find_node(self.nodes, old_child.variable)
+        target = find_node(self.nodes, old_parent.variable)
+        new_child.remove_prev(target)
+        self.colors = self.coloring()
+
+    def reverse_edge(self, edge):
+        self.remove_edge(edge)
+        u, v = edge
+        self.add_edge((v, u))
 
 
 # Test zone
@@ -248,6 +282,9 @@ def print_edge_set(edge_set):
 
 
 def find_node(node_list, variable):
+    """
+    Important, find a node by its variable's name
+    """
     for node in node_list:
         if node.variable == variable:
             return node
@@ -260,5 +297,3 @@ if __name__ == "__main__":
     test.print()
     print([node.variable for node in test.topologic_sort()])
     all_neighbor = test.neighbor_generation()
-    for graph in all_neighbor:
-        print()
