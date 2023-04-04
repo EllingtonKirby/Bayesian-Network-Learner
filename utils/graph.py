@@ -5,6 +5,7 @@ from graphviz import Digraph
 from itertools import product
 from scipy.special import loggamma
 import pandas as pd
+from copy import deepcopy
 
 class Node:
     """
@@ -12,7 +13,7 @@ class Node:
     """
     def __init__(self, prev=[], value=0, variable='None') -> None:
         self.prev = prev
-        self.variable=variable
+        self.variable = variable
         self.value = value
 
 class DAG:
@@ -21,7 +22,8 @@ class DAG:
     """
     def __init__(self, nodes: Set[Node], randomize=False, density=0.5, random_seed=time()) -> None:
         if not randomize:
-            self.nodes = nodes
+            self.nodes = deepcopy(nodes)
+            self.colors = self.coloring()
         else:
             seed(random_seed)
             self.nodes = set()
@@ -36,6 +38,9 @@ class DAG:
                             current_node.prev.append(candidate_parent)
                             colors[candidate_parent.variable] = colors[current_node.variable].union(
                                 colors[candidate_parent.variable])
+                            for parent in candidate_parent.prev:
+                                colors[parent.variable] = colors[parent.variable].union(colors[candidate_parent.variable])
+            self.colors = self.coloring()
     
     def bayesian_dirichilet_score(self, data: pd.DataFrame):
         total_sum = 0
@@ -106,8 +111,154 @@ class DAG:
         for node in self.nodes:
             print(f"Node: {node.variable}, parents: {[parent.variable for parent in node.prev]}")
 
+    def neighbor_generation(self):
+        """
+        Creates all the possible neighbor of the current DAG
+        """
+        forbiden_edges = set()  # Edges that would create cycles
+        for node, descendants in self.colors.items():
+            for descendant in descendants:
+                forbiden_edges.add((descendant, node))
+
+        already_present = set()  # Edges already in the DAG
+        for node in self.nodes:
+            for parent in node.prev:
+                already_present.add((parent, node))
+
+        def added_edge_neigbhor():
+            """
+            Build the list of all possible neighbor with an addition of 1 egde
+            """
+            all_possibilities = set()  # All possible edges in the DAG
+            for node_i in self.nodes:
+                for node_j in self.nodes:
+                    if node_j != node_i:
+                        all_possibilities.add((node_i, node_j))
+
+            possible_addition = all_possibilities - already_present - forbiden_edges
+            result = list()
+            for edge in possible_addition:
+                parent, child = edge
+                copy_node = deepcopy(self.nodes)   # copy the nodes
+                new_child = find_node(copy_node, child.variable)
+                new_parent = find_node(copy_node, parent.variable)
+                copy_node.remove(new_child)     # remove the child from it
+                child.prev.append(new_parent)   # add the new edge
+                copy_node.add(new_child)    # replace the child
+                result.append(DAG(copy_node))   # build the new DAG
+            return result
+
+        def remove_edge_neighbor():
+            """
+           Build the list of all possible neighbor with a deletion of 1 egde
+           """
+            result = list()
+            for edge in already_present:
+                parent, child = edge
+                copy_node = self.nodes.copy()  # copy the nodes
+                copy_node.remove(child)  # remove the child from it
+                child.prev.remove(parent)  # remove the wanted edge
+                copy_node.add(child)  # replace the child
+                result.append(DAG(copy_node))  # build the new DAG
+            return result
+
+        def inverse_edge_neighbor():
+            """
+            Build the list of all possible neighbor with a reversal of 1 egde
+            """
+            all_reverse = set()
+            for edge in already_present:
+                parent, child = edge
+                all_reverse.add((child, parent))
+            reversal_possibilities = all_reverse - forbiden_edges
+            result = list()
+            for edge in reversal_possibilities:
+                parent, child = edge
+                copy_node = self.nodes.copy()  # copy the nodes
+                copy_node.remove(child)  # remove the child from it
+                copy_node.remove(parent)
+                child.prev.remove(parent)  # remove the wanted edge
+                parent.prev.append(child)
+                copy_node.add(child)  # replace the child
+                copy_node.add(parent)
+                result.append(DAG(copy_node))  # build the new DAG
+            return result
+
+        a = added_edge_neigbhor()
+        b = remove_edge_neighbor()
+        c = inverse_edge_neighbor()
+        return a + b + c
+
+    def coloring(self):
+        """
+        The colors of a Node represent the nodes that would create a cycle if they were parents of the considered Node
+        """
+        def color_parent(coloring, current_node):
+            for parent in current_node.prev:
+                try:
+                    coloring[parent] = coloring[parent].union(coloring[current_node])
+                except KeyError:
+                    coloring[parent] = {parent}.union(coloring[current_node])
+                color_parent(coloring, parent)
+
+        result = dict()
+        for node in self.topologic_sort()[::-1]:  # we start from the well
+            if node not in result:
+                result[node] = {node}
+                color_parent(result, node)
+
+        return result
+
+    def topologic_sort(self):
+        """
+        Give a topologic sort of the Nodes
+        """
+        def explore(adjency_list, current_node, visited, stack):
+            """
+            Explore a connected part of the graph (with respect of the orientation of the edges)
+            """
+            visited[current_node] = True
+            for neighbor in adjency_list[current_node]:
+                if not visited[neighbor]:
+                    explore(adjency_list, neighbor, visited, stack)
+            stack.insert(0, current_node)
+
+        visited = {node: False for node in self.nodes}
+        stack = list()
+
+        adjency_list = {node: set() for node in self.nodes}
+        for node in adjency_list:
+            print([parent.variable for parent in node.prev])
+            for parent in node.prev:
+                print(parent.variable)
+                adjency_list[parent].add(node)
+
+        for node in self.nodes:
+            if not visited[node]:
+                explore(adjency_list, node, visited, stack)
+        return stack
+
+
 # Test zone
+def print_edge_set(edge_set):
+    for edge in edge_set:
+        parent, child = edge
+        print(f"{parent.variable} -> {child.variable}", end='\t')
+    print()
+
+
+def find_node(node_list, variable):
+    for node in node_list:
+        if node.variable == variable:
+            return node
+    return None
+
+
 if __name__ == "__main__":
-    node_set = {Node(variable=i) for i in range(0, 8)}
-    test = DAG(node_set, randomize=True, density=0.4, random_seed=time())
+    node_set = {Node(variable=i) for i in range(0, 5)}
+    test = DAG(node_set, randomize=True, density=0.4, random_seed=645231)
     test.print()
+    print([node.variable for node in test.topologic_sort()])
+    all_neighbor = test.neighbor_generation()
+    for graph in all_neighbor:
+        print()
