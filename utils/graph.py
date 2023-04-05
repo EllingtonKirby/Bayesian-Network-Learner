@@ -73,7 +73,7 @@ class DAG:
 
                 left_sum += (loggamma(r_i) - loggamma(r_i + m_ij0)) + right_sum
 
-            total_sum += left_sum + right_sum
+            total_sum += left_sum
         return total_sum
     
     def generate_parent_configurations(self, node: Node, unique_counts: dict):
