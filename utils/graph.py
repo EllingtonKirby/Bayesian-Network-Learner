@@ -5,7 +5,6 @@ from graphviz import Digraph
 from itertools import product
 from scipy.special import loggamma
 import pandas as pd
-from copy import deepcopy
 
 class Node:
     """
@@ -173,38 +172,9 @@ class DAG:
                 result.append(new_dag)
             return result
 
-        def inverse_edge_neighbor():
-            """
-            Build the list of all possible neighbor with a reversal of 1 egde
-            """
-            all_reverse = set()
-            for edge in already_present:
-                parent, child = edge
-                all_reverse.add((child, parent))
-            reversal_possibilities = all_reverse - forbiden_edges
-            result = list()
-            for edge in reversal_possibilities:
-                new_dag = DAG(self.nodes)
-                new_dag.reverse_edge(edge)
-                result.append(new_dag)
-            return result
-
         a = added_edge_neigbhor()
-        print("ADD EDGE")
-        for graph in a:
-            graph.print()
-            print("end")
         b = remove_edge_neighbor()
-        print("RM EDGE")
-        for graph in b:
-            graph.print()
-            print("end")
-        c = inverse_edge_neighbor()
-        print("REV EDGE")
-        for graph in c:
-            graph.print()
-            print("end")
-        return a + b + c
+        return a + b
 
     def coloring(self):
         """
@@ -293,7 +263,9 @@ def find_node(node_list, variable):
 
 if __name__ == "__main__":
     node_set = {Node(variable=i) for i in range(0, 5)}
-    test = DAG(node_set, randomize=True, density=0.4, random_seed=645231)
+    test = DAG(node_set, randomize=True, density=0.4, random_seed=time())
     test.print()
+    for node, a in test.colors.items():
+        print(f"{node.variable} -> {[b.variable for b in a]}")
     print([node.variable for node in test.topologic_sort()])
     all_neighbor = test.neighbor_generation()
