@@ -5,6 +5,7 @@ from graphviz import Digraph
 from itertools import product
 from scipy.special import loggamma
 import pandas as pd
+import numpy as np
 
 class Node:
     """
@@ -41,7 +42,7 @@ class DAG:
                     new_parent = find_node(node_list, parent.variable)
                     current_node.add_prev(new_parent)
             self.nodes = set(node_list)
-            # self.colors = self.coloring()
+            self.colors = self.coloring()
         else:
             seed(random_seed)
             self.nodes = set()
@@ -99,6 +100,55 @@ class DAG:
             total_sum += left_sum
         return total_sum
     
+    def bayesian_dirichilet_score_fast(self, data: pd.DataFrame):
+        total_sum = 0
+        
+        def collect_state_names(variable):
+            states = sorted(list(data.loc[:, variable].dropna().unique()))
+            return states
+
+        state_names = {
+            var: collect_state_names(var) for var in data.columns
+        }
+
+        for node in self.nodes:
+            variable = node.variable
+            parents = [parent.variable for parent in node.prev]
+            
+            configurations = data.groupby([variable] + parents).size().unstack(parents)
+
+            parents_states = [state_names[parent] for parent in parents]
+            
+            if len(parents_states) == 0:
+                state_count_data = data.loc[:, variable].value_counts()
+
+                state_counts = (
+                    state_count_data.reindex(state_names[variable])
+                    .fillna(0)
+                    .to_frame()
+                )
+            else:
+                row_index = state_names[variable]
+                column_index = pd.MultiIndex.from_product(parents_states, names=parents)
+                state_counts = configurations.reindex(
+                    index=row_index, columns=column_index
+                ).fillna(0)
+
+            r_i = len(state_names[variable])
+            
+            counts = np.asarray(state_counts)
+            
+            log_counts = loggamma(counts + 1)
+            loggamma_sum_per_configuration = np.sum(log_counts, axis=0, dtype=float)
+            sum_per_configuration = np.sum(counts, axis=0)
+
+            left_sum = 0
+            for (sum, loggamma_sum) in zip(sum_per_configuration, loggamma_sum_per_configuration):
+                left_sum += loggamma(r_i) - loggamma(r_i + sum) + loggamma_sum
+
+            total_sum += left_sum
+        return total_sum
+        
     def generate_parent_configurations(self, node: Node, unique_counts: dict):
             parents = node.prev
             possible_values = [unique_counts[parent.variable] for parent in parents]
@@ -119,7 +169,7 @@ class DAG:
         nodes, edges = self.trace_dag()
         for n in nodes:
             uid = str(id(n))
-            dot.node(name=uid, label="{ %s | value: %d }"%(n.variable, n.value), shape='record')
+            dot.node(name=uid, label="{ %s }"%(n.variable), shape='record')
         for n1, n2 in edges:
             dot.edge(str(id(n1)), str(id(n2)))
 
@@ -260,9 +310,6 @@ def find_node(node_list, variable):
             return node
     return None
 
-import numpy as np
-from pgmpy.estimators import BDeuScore
-from pgmpy.models import BayesianNetwork
 
 class HillClimbing:
     def __init__(self, base_graph : DAG, data_frame, max_iteration=1000):
@@ -271,18 +318,13 @@ class HillClimbing:
         self.data_frame = data_frame
 
     def solve(self):
-        bdeu = BDeuScore(self.data_frame)
         best_graph = self.base_graph
-        edges = [(parent.variable, child.variable) for child in self.base_graph.nodes for parent in child.prev]
-        model = BayesianNetwork(edges)
-        best_score = bdeu.score(model)
+        best_score = best_graph.bayesian_dirichilet_score_fast(self.data_frame)
         for i in range(1, self.max_iteration):
             change = False
             all_neighbours = best_graph.neighbor_generation()
             for neighbor in all_neighbours:
-                neighbor_graph = [(parent.variable, child.variable) for child in neighbor.nodes for parent in child.prev]
-                neighbor_model = BayesianNetwork(neighbor_graph)
-                current_score = bdeu.score(neighbor_model)
+                current_score = neighbor.bayesian_dirichilet_score_fast(self.data_frame)
                 if current_score > best_score:
                     best_graph = neighbor
                     best_score = current_score
