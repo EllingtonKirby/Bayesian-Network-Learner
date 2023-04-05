@@ -1,6 +1,5 @@
 from graph import *
 
-
 class HillClimbing:
     def __init__(self, base_graph : DAG, data_frame, max_iteration=1000):
         self.base_graph = base_graph
@@ -12,7 +11,7 @@ class HillClimbing:
         best_score = best_graph.bayesian_dirichilet_score(self.data_frame)
         for _ in range(1, self.max_iteration):
             change = False
-            all_neighbours = current_score.neighbor_generation()
+            all_neighbours = best_graph.neighbor_generation()
             for neighbor in all_neighbours:
                 current_score = neighbor.bayesian_dirichilet_score(self.data_frame)
                 if current_score > best_score:

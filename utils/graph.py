@@ -41,7 +41,7 @@ class DAG:
                     new_parent = find_node(node_list, parent.variable)
                     current_node.add_prev(new_parent)
             self.nodes = set(node_list)
-            self.colors = self.coloring()
+            # self.colors = self.coloring()
         else:
             seed(random_seed)
             self.nodes = set()
@@ -260,6 +260,36 @@ def find_node(node_list, variable):
             return node
     return None
 
+import numpy as np
+from pgmpy.estimators import BDeuScore
+from pgmpy.models import BayesianNetwork
+
+class HillClimbing:
+    def __init__(self, base_graph : DAG, data_frame, max_iteration=1000):
+        self.base_graph = base_graph
+        self.max_iteration = max_iteration
+        self.data_frame = data_frame
+
+    def solve(self):
+        bdeu = BDeuScore(self.data_frame)
+        best_graph = self.base_graph
+        edges = [(parent.variable, child.variable) for child in self.base_graph.nodes for parent in child.prev]
+        model = BayesianNetwork(edges)
+        best_score = bdeu.score(model)
+        for i in range(1, self.max_iteration):
+            change = False
+            all_neighbours = best_graph.neighbor_generation()
+            for neighbor in all_neighbours:
+                neighbor_graph = [(parent.variable, child.variable) for child in neighbor.nodes for parent in child.prev]
+                neighbor_model = BayesianNetwork(neighbor_graph)
+                current_score = bdeu.score(neighbor_model)
+                if current_score > best_score:
+                    best_graph = neighbor
+                    best_score = current_score
+                    change = True
+            if not change:  # No better graph found
+                return best_graph, best_score
+        return best_graph, best_score
 
 if __name__ == "__main__":
     node_set = {Node(variable=i) for i in range(0, 5)}
