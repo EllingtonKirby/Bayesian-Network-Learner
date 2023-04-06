@@ -128,6 +128,10 @@ class DAG:
                     .to_frame()
                 )
             else:
+                if not isinstance(configurations.columns, pd.MultiIndex):
+                    configurations.columns = pd.MultiIndex.from_arrays(
+                        [configurations.columns]
+                    )
                 row_index = state_names[variable]
                 column_index = pd.MultiIndex.from_product(parents_states, names=parents)
                 state_counts = configurations.reindex(
