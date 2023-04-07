@@ -54,7 +54,12 @@ class Bayesian_Classifier:
         best_guess = None
         best_score = -1
         for target_value in self.target_domain:
-            product = 1
+
+            mask = self.data_frame[self.target_variable] == target_value
+            tmp_df = self.training_set.loc[mask]
+            target_value_proportion = len(tmp_df) / len(self.training_set)
+
+            product = target_value_proportion
             for variable in x.keys():
                 product *= self.probability_estimation_table[variable][x[variable]][target_value]
             if product >= best_score:
