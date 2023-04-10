@@ -69,6 +69,9 @@ class ProbaTable:
         tmp_df = self.data_frame.loc[mask]
         variable_value_prob_with_target_value = len(tmp_df) / len(self.data_frame)
 
+        if assignment_proportion == 0:
+            return 0
+
         return variable_value_prob_with_target_value / assignment_proportion
 
 
@@ -96,8 +99,8 @@ class Network_Classifier:
         test_set = self.data_frame[training_size:]
         return training_set, test_set
 
-    def train_parent(self):
-        self.markov_blanket_estimation_table = ProbaTable({parent.variable for parent in self.central_node.prev},
+    def train_markov(self):
+        self.markov_blanket_estimation_table = ProbaTable(self.find_markov_blanket(),
                                                           self.training_set, self.target_variable)
 
     def predict(self, x: pd.Series):
@@ -157,19 +160,34 @@ if __name__ == "__main__":
     titanic_dag = DAG({node for _, node in node_dict.items()})
     for _ in range(10):
         titanic_classifier = Network_Classifier(titanic_dag, titanic_df, "survived")
-        titanic_classifier.train_parent()
+        titanic_classifier.train_markov()
         if titanic_classifier.test() > best_titanic_score:
             best_titanic_score = titanic_classifier.test()
     print(f"Best accuracy of {best_titanic_score * 100}% on test set")
 
-    # print("WINE")
-    # best_wine_score = 0
-    # wine_df = pd.read_csv("../medium.csv")
-    # for _ in range(10):
-    #     wine_classifier = Network_Classifier(wine_df, "quality")
-    #     wine_classifier.train()
-    #     if wine_classifier.test() > best_wine_score:
-    #         best_wine_score = wine_classifier.test()
-    # print(f"Best accuracy of {best_wine_score * 100}% on test set")
+    print("WINE")
+    best_wine_score = 0
+    wine_df = pd.read_csv("../medium.csv")
+    node_dict = {variable: Node(variable=variable, prev=[]) for variable in wine_df.keys()}
+    node_dict["freesulfurdioxide"].prev += [node_dict["totalsulfurdioxide"]]
+    node_dict["totalsulfurdioxide"].prev += [node_dict["alcohol"], node_dict["density"]]
+    node_dict["sulphates"].prev += [node_dict["alcohol"], node_dict["density"]]
+    node_dict["ph"].prev += [node_dict["alcohol"], node_dict["fixedacidity"]]
+    node_dict["quality"].prev += [node_dict["alcohol"], node_dict["volatileacidity"]]
+    node_dict["alcohol"].prev += [node_dict["fixedacidity"], node_dict["chlorides"], node_dict["volatileacidity"],
+                                  node_dict["density"]]
+    node_dict["fixedacidity"].prev += [node_dict["citricacid"]]
+    node_dict["citricacid"].prev += [node_dict["density"], node_dict["chlorides"]]
+    node_dict["density"].prev += [node_dict["residualsugar"]]
+    node_dict["volatileacidity"].prev += [node_dict["residualsugar"]]
+    wine_dag = DAG({node for _, node in node_dict.items()})
+
+    for i in range(100):
+        print(i)
+        wine_classifier = Network_Classifier(wine_dag, wine_df, "quality")
+        wine_classifier.train_markov()
+        if wine_classifier.test() > best_wine_score:
+            best_wine_score = wine_classifier.test()
+    print(f"Best accuracy of {best_wine_score * 100}% on test set")
 
 
