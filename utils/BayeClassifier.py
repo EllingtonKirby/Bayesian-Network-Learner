@@ -6,6 +6,7 @@ class Bayesian_Classifier:
     def __init__(self, data_frame: pd.DataFrame, target_variable: str, training_split=0.8):
         self.data_frame = data_frame
         self.target_variable = target_variable
+        self.training_split = training_split
         self.training_set, self.test_set = self.split()
         self.probability_estimation_table = dict()
 
@@ -13,12 +14,12 @@ class Bayesian_Classifier:
         target_max = self.data_frame[self.target_variable].max()
         self.target_domain = range(target_min, target_max + 1)
 
-    def split(self, training_split=0.8):
+    def split(self):
         """
         Split the set into training and testing
         """
         self.data_frame = self.data_frame.sample(frac=1)
-        training_size = ceil(training_split * len(self.data_frame))
+        training_size = ceil(self.training_split * len(self.data_frame))
         training_set = self.data_frame[:training_size]
         test_set = self.data_frame[training_size:]
         return training_set, test_set
@@ -86,7 +87,7 @@ if __name__ == "__main__":
     print("TITANIC")
     best_titanic_score = 0
     titanic_df = pd.read_csv("../small.csv")
-    for _ in range(10):
+    for _ in range(100):
         titanic_classifier = Bayesian_Classifier(titanic_df, "survived")
         titanic_classifier.train()
         if titanic_classifier.test() > best_titanic_score:
